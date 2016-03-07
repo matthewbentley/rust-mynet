@@ -1,0 +1,35 @@
+[root]
+name = "net"
+version = "0.1.0"
+dependencies = [
+ "eui48 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tuntap 0.1.0 (git+https://github.com/matthewbentley/tuntap-rust.git)",
+]
+
+[[package]]
+name = "eui48"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "rustc-serialize 0.3.18 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libc"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "rustc-serialize"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "tuntap"
+version = "0.1.0"
+source = "git+https://github.com/matthewbentley/tuntap-rust.git#9de4c3f2fb5e31f9f3b98a81c609774427c54bce"
+dependencies = [
+ "libc 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+

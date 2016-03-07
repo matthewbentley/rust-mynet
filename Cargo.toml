@@ -1,0 +1,12 @@
+[package]
+name = "net"
+version = "0.1.0"
+authors = ["Matthew Bentley <matthew.t.bentley@gmail.com>"]
+
+[dependencies]
+libc = "^0.2"
+eui48 = "^0.1"
+
+[dependencies.tuntap]
+git = 'https://github.com/matthewbentley/tuntap-rust.git'
+
