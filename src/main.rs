@@ -151,11 +151,11 @@ impl FlagsOffset {
     }
 
     fn bit1(&self) -> bool {
-        (self.flags_offset & 0b0100000000000000) == 1
+        (self.flags_offset & 0b0100000000000000) != 0
     }
 
     fn bit2(&self) -> bool {
-        (self.flags_offset & 0b0010000000000000) == 1
+        (self.flags_offset & 0b0010000000000000) != 0
     }
 
     fn offset(&self) -> u16 {
@@ -228,7 +228,7 @@ fn checksum(data: &[u8], len: u16) -> u16 {
 }
 
 fn data_format(data: &[u8], end: usize) -> String {
-    let mut data_string: String = "".to_string();
+    let mut data_string: String = "".to_owned();
     let finish_at = if end == 0 {
         data.len()
     } else {
