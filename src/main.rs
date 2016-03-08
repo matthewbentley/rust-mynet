@@ -11,6 +11,9 @@ use std::mem;
 
 trait Packet {}
 trait ArpPacket {}
+trait Ipv4Packet {}
+trait IcmpPacket {}
+trait PingPayload {}
 
 #[repr(C, packed)]
 struct EthHdr<T: Packet> {
@@ -53,8 +56,116 @@ struct ArpHdr<T: ArpPacket> {
     data: T,
 }
 
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct Ipv4Hdr<T: Ipv4Packet> {
+    version_ihl: VersionIhl,
+    dscp_ecn: DscpEcn,
+    length: u16,
+    id: u16,
+    flags_offset: FlagsOffset,
+    ttl: u8,
+    protocol: Protocol,
+    checksum: u16,
+    sip: Ipv4Addr,
+    dip: Ipv4Addr,
+    options_data: T,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct IcmpHdr<T: IcmpPacket> {
+    typ: IcmpType,
+    code: u8,
+    checksum: u16,
+    rest: T,
+}
+
+impl Ipv4Packet for [u8; 1466] {}
+impl <T: IcmpPacket> Ipv4Packet for IcmpHdr<T> {}
+
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct PingPacket<T: PingPayload> {
+    id: u16,
+    seq: u16,
+    payload: T,
+}
+
+impl <T: PingPayload> IcmpPacket for PingPacket<T> {}
+impl IcmpPacket for [u8; 1462] {}
+
+impl PingPayload for [u8; 1458] {}
+
+#[derive(Debug, Clone)]
+#[repr(u8)]
+enum IcmpType {
+    Unsupported = 0xff,
+    EchoReply = 0x00,
+    EchoRequest = 0x08,
+}
+
+#[derive(Debug, Clone)]
+#[repr(u8)]
+enum Protocol {
+    Unknown = 0xff,
+    Icmp = 0x01,
+    Igmp = 0x02,
+    Tcp = 0x06,
+    Udp = 0x11,
+    Encap = 0x29,
+    Ospf = 0x59,
+    Sctp = 0x84,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct VersionIhl {
+    version_ihl: u8,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct DscpEcn {
+    dscp_ecn: u8,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C, packed)]
+struct FlagsOffset{
+    flags_offset: u16,
+}
+
+impl VersionIhl {
+    fn version(&self) -> u8 {
+        (self.version_ihl & 0b11110000) / 16
+    }
+    fn ihl(&self) -> u8 {
+        self.version_ihl & 0b00001111
+    }
+}
+
+impl FlagsOffset {
+    fn bit0(&self) -> bool {
+        false
+    }
+
+    fn bit1(&self) -> bool {
+        (self.flags_offset & 0b0100000000000000) == 1
+    }
+
+    fn bit2(&self) -> bool {
+        (self.flags_offset & 0b0010000000000000) == 1
+    }
+
+    fn offset(&self) -> u16 {
+        self.flags_offset & 0b0001111111111111
+    }
+}
+
 impl Packet for [u8; 1486] {}
 impl<T: ArpPacket> Packet for ArpHdr<T> {}
+impl<T: Ipv4Packet> Packet for Ipv4Hdr<T> {}
 
 #[derive(Debug, Clone)]
 #[repr(C, packed)]
@@ -102,38 +213,54 @@ enum OpCode {
     Reply = 0x0200,
 }
 
-// fn data_format(data: &[u8]) -> String {
-//    let mut data_string: String = "".to_string();
-//
-//    for (i, c) in data.iter().enumerate() {
-//        if i % 4 == 0 {
-//            data_string.push(' ');
-//        }
-//        if i % 8 == 0 {
-//            data_string.push('\n');
-//        }
-//
-//        data_string.push_str(&format!("{:02x} ", c));
-//    }
-//
-//    data_string
-// }
+fn checksum(data: &[u8], len: u16) -> u16 {
+    let mut sum = 0u32;
+    let mut i: usize = 0;
+    while i < len as usize {
+        let word = (*data.get(i).unwrap() as u32) << 8 | *data.get(i+1).unwrap() as u32;
+        sum = sum + word;
+        i = i + 2;
+    }
+    while sum >> 16 != 0 {
+        sum = (sum >> 16) + (sum & 0xFFFF);
+    }
+    u16::to_be(!sum as u16)
+}
+
+fn data_format(data: &[u8], end: usize) -> String {
+   let mut data_string: String = "".to_string();
+   let finish_at = if end == 0 {
+       data.len()
+   } else {
+       end
+   };
+
+   for (i, c) in data.iter().enumerate() {
+       if i == finish_at {
+           break;
+       }
+       if i % 4 == 0 {
+           data_string.push(' ');
+       }
+       if i % 8 == 0 {
+           data_string.push('\n');
+       }
+
+       data_string.push_str(&format!("{:02x} ", c));
+   }
+
+   data_string
+}
 
 fn main() {
     let mut tap = TunTap::create(Tap, Ipv4);
 
     println!("tap name: {:?}", tap.get_name());
     let address = [10, 0, 0, 1];
-    let address_str = format!("{}.{}.{}.{}",
-                              address[0],
-                              address[1],
-                              address[2],
-                              address[3]);
     let mac: [u8; 6] = [0x00, 0x20, 0x91, 0x50, 0xe2, 0x43];
 
     tap.set_mac(mac);
     tap.up();
-    tap.add_address(&address_str);
 
     let mut arp_map = HashMap::new();
 
@@ -176,6 +303,54 @@ fn main() {
                     tap.write(&rep).unwrap();
                 }
             }
+        } else if let EtherType::Ipv4 = eth.ethertype {
+            let ethipv4: EthHdr<Ipv4Hdr<[u8; 1466]>> = unsafe { mem::transmute(eth) };
+            if ethipv4.payload.version_ihl.ihl() != 5 {
+                panic!("IPv4 options not supported!");
+            }
+
+            if let Protocol::Icmp = ethipv4.payload.protocol {
+                let ethicmp: EthHdr<Ipv4Hdr<IcmpHdr<[u8; 1462]>>> = unsafe {
+                    mem::transmute(ethipv4)
+                };
+                let icmplen = u16::to_be(ethicmp.payload.length) - 20;
+
+                if let IcmpType::EchoRequest = ethicmp.payload.options_data.typ {
+                    let mut ethping: EthHdr<Ipv4Hdr<IcmpHdr<PingPacket<[u8; 1458]>>>> = unsafe {
+                        mem::transmute(ethicmp)
+                    };
+
+                    ethping.dmac = ethping.smac;
+                    ethping.smac = MacAddress::new(mac);
+                    ethping.payload.dip = ethping.payload.sip;
+                    ethping.payload.sip = Ipv4Addr::new(address[0],
+                                                        address[1],
+                                                        address[2],
+                                                        address[3]);
+                    ethping.payload.options_data.typ = IcmpType::EchoReply;
+                    ethping.payload.options_data.checksum = 0x0000;
+                    let mut ethipv4: EthHdr<Ipv4Hdr<[u8; 1466]>> = unsafe {
+                        mem::transmute(ethping)
+                    };
+                    let icmpcs = checksum(&ethipv4.payload.options_data, icmplen);
+                    ethipv4.payload.checksum = 0x0000;
+                    let eth: EthHdr<[u8; 1486]> = unsafe { mem::transmute(ethipv4) };
+                    let ipv4cs = checksum(&eth.payload, 20);
+                    let mut ethping: EthHdr<Ipv4Hdr<IcmpHdr<PingPacket<[u8; 1458]>>>> = unsafe {
+                        mem::transmute(eth)
+                    };
+                    ethping.payload.options_data.checksum = icmpcs;
+                    ethping.payload.checksum = ipv4cs;
+
+                    let send: [u8; 1500] = unsafe { mem::transmute(ethping) };
+                    tap.write(&send).unwrap();
+                }
+            }
+        } else {
+            println!("Unknown packet type");
+            println!("smac: {}\ndmac: {}\nethertype: {:?}", eth.dmac, eth.smac,
+                     eth.ethertype);
+            println!("data: {}\n", data_format(&eth.payload, _len));
         }
     }
 }
