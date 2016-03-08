@@ -82,7 +82,7 @@ struct IcmpHdr<T: IcmpPacket> {
 }
 
 impl Ipv4Packet for [u8; 1466] {}
-impl <T: IcmpPacket> Ipv4Packet for IcmpHdr<T> {}
+impl<T: IcmpPacket> Ipv4Packet for IcmpHdr<T> {}
 
 #[derive(Debug, Clone)]
 #[repr(C, packed)]
@@ -92,7 +92,7 @@ struct PingPacket<T: PingPayload> {
     payload: T,
 }
 
-impl <T: PingPayload> IcmpPacket for PingPacket<T> {}
+impl<T: PingPayload> IcmpPacket for PingPacket<T> {}
 impl IcmpPacket for [u8; 1462] {}
 
 impl PingPayload for [u8; 1458] {}
@@ -132,7 +132,7 @@ struct DscpEcn {
 
 #[derive(Debug, Clone)]
 #[repr(C, packed)]
-struct FlagsOffset{
+struct FlagsOffset {
     flags_offset: u16,
 }
 
@@ -217,7 +217,7 @@ fn checksum(data: &[u8], len: u16) -> u16 {
     let mut sum = 0u32;
     let mut i: usize = 0;
     while i < len as usize {
-        let word = (*data.get(i).unwrap() as u32) << 8 | *data.get(i+1).unwrap() as u32;
+        let word = (*data.get(i).unwrap() as u32) << 8 | *data.get(i + 1).unwrap() as u32;
         sum = sum + word;
         i = i + 2;
     }
@@ -228,28 +228,28 @@ fn checksum(data: &[u8], len: u16) -> u16 {
 }
 
 fn data_format(data: &[u8], end: usize) -> String {
-   let mut data_string: String = "".to_string();
-   let finish_at = if end == 0 {
-       data.len()
-   } else {
-       end
-   };
+    let mut data_string: String = "".to_string();
+    let finish_at = if end == 0 {
+        data.len()
+    } else {
+        end
+    };
 
-   for (i, c) in data.iter().enumerate() {
-       if i == finish_at {
-           break;
-       }
-       if i % 4 == 0 {
-           data_string.push(' ');
-       }
-       if i % 8 == 0 {
-           data_string.push('\n');
-       }
+    for (i, c) in data.iter().enumerate() {
+        if i == finish_at {
+            break;
+        }
+        if i % 4 == 0 {
+            data_string.push(' ');
+        }
+        if i % 8 == 0 {
+            data_string.push('\n');
+        }
 
-       data_string.push_str(&format!("{:02x} ", c));
-   }
+        data_string.push_str(&format!("{:02x} ", c));
+    }
 
-   data_string
+    data_string
 }
 
 fn main() {
@@ -348,7 +348,9 @@ fn main() {
             }
         } else {
             println!("Unknown packet type");
-            println!("smac: {}\ndmac: {}\nethertype: {:?}", eth.dmac, eth.smac,
+            println!("smac: {}\ndmac: {}\nethertype: {:?}",
+                     eth.dmac,
+                     eth.smac,
                      eth.ethertype);
             println!("data: {}\n", data_format(&eth.payload, _len));
         }
